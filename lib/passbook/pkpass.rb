@@ -23,20 +23,39 @@ module Passbook
       @json = json
     end
 
-    def create(options = {})
-      options[:in_memory] ||= false # false to return a temp file, true to return the ZipOutputStream
+    def build
       manifest = self.createManifest
 
       # Check pass for necessary files and fields
       self.checkPass manifest
 
+      # Create pass signature
       signature = self.createSignature manifest
 
-      if options[:in_memory]
-        self.outputZip(manifest, signature)
-      else
-        self.createZip(manifest, signature)
-      end
+      return [manifest, signature]
+    end
+
+    # Backward compatibility
+    def create
+      self.file.path
+    end
+
+    # Return a Tempfile containing our ZipStream
+    def file(options = {})
+      options[:file_name] ||= 'pass.pkpass'
+
+      temp_file = Tempfile.new(options[:file_name])
+      temp_file.write self.stream.string
+      temp_file.close
+
+      temp_file
+    end
+
+    # Return a ZipOutputStream
+    def stream
+      manifest, signature = self.build
+
+      self.outputZip manifest, signature
     end
 
     protected
@@ -99,7 +118,7 @@ module Passbook
 
       def outputZip manifest, signature
 
-        zip_output = Zip::ZipOutputStream.write_buffer do |zip|
+        Zip::ZipOutputStream.write_buffer do |zip|
           zip.put_next_entry 'pass.json'
           zip.write @json
           zip.put_next_entry 'manifest.json'
@@ -117,7 +136,6 @@ module Passbook
             end
           end
         end
-        return zip_output
       end
   end
 end
